@@ -1,0 +1,1 @@
+login: sqlite3 lexi.db
