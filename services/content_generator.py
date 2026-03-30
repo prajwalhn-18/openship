@@ -10,8 +10,8 @@ from services.user_emails import email_dict
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent"
-DB_PATH = "lexi.db"
+API_URL = os.getenv("GEMINI_API_URL")
+DB_PATH = os.getenv("DB_PATH", "openship.db")
 
 def generate_syllabus_content(task_description: str, task_title: str, skill: str):
     if not API_KEY:
@@ -77,7 +77,7 @@ def start_content_generation(skill_id: str):
         print("Error in start_content_generation")
         return False
 
-def create_content_for_next_10_days():
+def create_content_for_newsletters():
     try:
         skill_ids = get_list_of_skill_ids()
 

@@ -12,8 +12,8 @@ load_dotenv()
 # NOTE: Replace the placeholder with your actual Gemini API Key.
 # If running outside a canvas environment, you must provide your key.
 API_KEY = os.getenv("GEMINI_API_KEY")
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
-DB_PATH = "lexi.db"
+API_URL = os.getenv("GEMINI_API_URL")
+DB_PATH = os.getenv("DB_PATH", "openship.db")
 # --- JSON Schema Definition (Ensures structured output) ---
 # This schema enforces the exact 'Month > Week > Day' structure requested.
 SYLLABUS_SCHEMA = {
@@ -61,15 +61,30 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
             skill TEXT NOT NULL,
+            skill_id INTEGER,
             month INTEGER,
             week INTEGER,
             day INTEGER,
             topic TEXT,
             task TEXT,
             hours INTEGER,
+            newsletter TEXT,
+            completed INTEGER DEFAULT 0,
+            stop_sending INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    # Migrate existing tables missing columns
+    existing_columns = {row[1] for row in cursor.execute("PRAGMA table_info(daily_tasks)")}
+    migrations = {
+        "skill_id":     "ALTER TABLE daily_tasks ADD COLUMN skill_id INTEGER",
+        "newsletter":   "ALTER TABLE daily_tasks ADD COLUMN newsletter TEXT",
+        "completed":    "ALTER TABLE daily_tasks ADD COLUMN completed INTEGER DEFAULT 0",
+        "stop_sending": "ALTER TABLE daily_tasks ADD COLUMN stop_sending INTEGER DEFAULT 0",
+    }
+    for col, sql in migrations.items():
+        if col not in existing_columns:
+            cursor.execute(sql)
     conn.commit()
     conn.close()
 

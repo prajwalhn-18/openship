@@ -1,6 +1,10 @@
+import os
 import sqlite3
+from dotenv import load_dotenv
 
-DB_PATH = "lexi.db"
+load_dotenv()
+
+DB_PATH = os.getenv("DB_PATH", "openship.db")
 
 def execute_query_one(query, params=None):
     """Run a SELECT returning a single row."""
@@ -65,6 +69,66 @@ def execute_update(query, params=None):
             conn.close()
         except:
             pass
+
+def init_skills_table():
+    execute_update("""
+        CREATE TABLE IF NOT EXISTS skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            skill TEXT NOT NULL,
+            days INTEGER DEFAULT 90,
+            hours INTEGER DEFAULT 1,
+            stop_sending INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # Migrate existing tables missing columns
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    existing_columns = {row[1] for row in cursor.execute("PRAGMA table_info(skills)")}
+    migrations = {
+        "days":  "ALTER TABLE skills ADD COLUMN days INTEGER DEFAULT 90",
+        "hours": "ALTER TABLE skills ADD COLUMN hours INTEGER DEFAULT 1",
+    }
+    for col, sql in migrations.items():
+        if col not in existing_columns:
+            cursor.execute(sql)
+    conn.commit()
+    conn.close()
+
+def skill_exists(email: str, skill: str) -> bool:
+    row = execute_query_one(
+        "SELECT id FROM skills WHERE email = ? AND skill = ?", (email, skill)
+    )
+    return row is not None
+
+def create_skill(user_id: str, email: str, skill: str, days: int, hours: int) -> int | None:
+    init_skills_table()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO skills (user_id, email, skill, days, hours) VALUES (?, ?, ?, ?, ?)",
+            (user_id, email, skill, days, hours),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    except Exception as e:
+        print(f"[DB ERROR] create_skill failed: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_skill(email: str, skill: str) -> dict | None:
+    row = execute_query_one(
+        "SELECT user_id, days, hours FROM skills WHERE email = ? AND skill = ?", (email, skill)
+    )
+    if row is None:
+        return None
+    return {"user_id": row[0], "days": row[1], "hours": row[2]}
 
 def get_list_of_skill_ids():
     query = "SELECT id from skills where stop_sending = 0"
