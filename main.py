@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from services.syllabus_generator import generate_syllabus, init_db
 from services.content_generator import create_content_for_newsletters
 from services.newsletter_issuer import issue_todays_newsletters
-from services.db_service import skill_exists, create_skill, get_skill
+from services.db_service import skill_exists, create_skill, get_skill, get_all_syllabi, get_syllabus_detail
 from models.main import SubscribeRequest, GenerateSyllabusRequest
 
 @asynccontextmanager
@@ -29,6 +29,25 @@ def subscribe(payload: SubscribeRequest):
         raise HTTPException(status_code=500, detail="Failed to create subscription")
 
     return {"status": "success", "message": f"Subscribed {payload.email} to '{payload.skill}'", "user_id": user_id}
+
+
+@app.get("/syllabi")
+def list_syllabi():
+    """
+    Return all active subscriptions with task progress stats.
+    """
+    return get_all_syllabi()
+
+
+@app.get("/syllabi/{skill_id}")
+def get_syllabus(skill_id: int):
+    """
+    Return the full chapter breakdown (months → weeks → days) for a syllabus.
+    """
+    detail = get_syllabus_detail(skill_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Syllabus {skill_id} not found")
+    return detail
 
 
 @app.post("/generate-syllabus")

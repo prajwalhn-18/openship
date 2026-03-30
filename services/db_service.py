@@ -130,6 +130,84 @@ def get_skill(email: str, skill: str) -> dict | None:
         return None
     return {"user_id": row[0], "days": row[1], "hours": row[2]}
 
+def get_syllabus_detail(skill_id: int) -> dict | None:
+    skill_row = execute_query_one(
+        "SELECT id, user_id, email, skill, days, hours, created_at FROM skills WHERE id = ?",
+        (skill_id,)
+    )
+    if skill_row is None:
+        return None
+
+    tasks = execute_query_all("""
+        SELECT id, day, month, week, topic, task, hours, completed, newsletter IS NOT NULL
+        FROM daily_tasks
+        WHERE skill_id = ?
+        ORDER BY month ASC, week ASC, day ASC
+    """, (skill_id,))
+
+    months: dict = {}
+    for row in tasks:
+        task_id, day, month, week, topic, task, hours, completed, has_content = row
+        m = months.setdefault(month, {})
+        w = m.setdefault(week, [])
+        w.append({
+            "id": task_id,
+            "day": day,
+            "topic": topic,
+            "task": task,
+            "hours": hours,
+            "completed": bool(completed),
+            "has_content": bool(has_content),
+        })
+
+    return {
+        "skill_id": skill_row[0],
+        "user_id": skill_row[1],
+        "email": skill_row[2],
+        "skill": skill_row[3],
+        "days": skill_row[4],
+        "hours": skill_row[5],
+        "created_at": skill_row[6],
+        "months": [
+            {
+                "month": m,
+                "weeks": [
+                    {"week": w, "tasks": tasks_list}
+                    for w, tasks_list in sorted(weeks.items())
+                ],
+            }
+            for m, weeks in sorted(months.items())
+        ],
+    }
+
+def get_all_syllabi():
+    query = """
+        SELECT
+            s.id, s.user_id, s.email, s.skill, s.days, s.hours, s.created_at,
+            COUNT(dt.id) as total_tasks,
+            SUM(CASE WHEN dt.completed = 1 THEN 1 ELSE 0 END) as completed_tasks
+        FROM skills s
+        LEFT JOIN daily_tasks dt ON dt.skill_id = s.id
+        WHERE s.stop_sending = 0
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+    """
+    rows = execute_query_all(query)
+    return [
+        {
+            "skill_id": row[0],
+            "user_id": row[1],
+            "email": row[2],
+            "skill": row[3],
+            "days": row[4],
+            "hours": row[5],
+            "created_at": row[6],
+            "total_tasks": row[7] or 0,
+            "completed_tasks": int(row[8] or 0),
+        }
+        for row in rows
+    ]
+
 def get_list_of_skill_ids():
     query = "SELECT id from skills where stop_sending = 0"
     rows = execute_query_all(query)
