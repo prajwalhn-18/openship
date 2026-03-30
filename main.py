@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from services.syllabus_generator import generate_syllabus, init_db
 from services.content_generator import create_content_for_newsletters, start_content_generation, generate_content_for_task
-from services.newsletter_issuer import issue_todays_newsletters
-from services.db_service import skill_exists, create_skill, get_skill, get_all_syllabi, get_syllabus_detail
-from models.main import SubscribeRequest, GenerateSyllabusRequest, GenerateContentRequest, GenerateChapterContentRequest
+from services.newsletter_issuer import issue_todays_newsletters, send_newsletter
+from services.refresh_token import get_new_jwt_token
+from services.db_service import skill_exists, create_skill, get_skill, get_all_syllabi, get_syllabus_detail, get_chapter_content, get_email_id_from_skill_id
+from models.main import SubscribeRequest, GenerateSyllabusRequest, GenerateContentRequest, GenerateChapterContentRequest, SendChapterEmailRequest
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,6 +88,43 @@ def generate_chapter_content(payload: GenerateChapterContentRequest):
     if not success:
         raise HTTPException(status_code=500, detail=f"Failed to generate content for task {payload.task_id}")
     return {"status": "success", "message": f"Content generated for task {payload.task_id}"}
+
+
+@app.get("/chapter/{task_id}")
+def get_chapter(task_id: int):
+    """
+    Return the full content (newsletter HTML) for a single chapter.
+    """
+    chapter = get_chapter_content(task_id)
+    if chapter is None:
+        raise HTTPException(status_code=404, detail=f"Chapter {task_id} not found")
+    return chapter
+
+
+@app.post("/send-email/chapter")
+def send_chapter_email(payload: SendChapterEmailRequest):
+    """
+    Send the newsletter email for a single chapter and mark it completed.
+    """
+    chapter = get_chapter_content(payload.task_id)
+    if chapter is None:
+        raise HTTPException(status_code=404, detail=f"Chapter {payload.task_id} not found")
+    if not chapter["newsletter"]:
+        raise HTTPException(status_code=400, detail="No content generated for this chapter yet")
+
+    email = get_email_id_from_skill_id(chapter["skill_id"])
+    if not email:
+        raise HTTPException(status_code=404, detail="Could not find email for this skill")
+
+    token = get_new_jwt_token()
+    title = f"Day {chapter['day']} - {chapter['skill']}: {chapter['topic']}"
+    send_newsletter.__globals__["TOKEN"] = token
+    send_newsletter(email_to=email, title=title, content=chapter["newsletter"])
+
+    from services.db_service import execute_update
+    execute_update("UPDATE daily_tasks SET completed = 1 WHERE id = ?", (payload.task_id,))
+
+    return {"status": "success", "message": f"Email sent to {email} for Day {chapter['day']}"}
 
 
 @app.post("/issue-newsletters")

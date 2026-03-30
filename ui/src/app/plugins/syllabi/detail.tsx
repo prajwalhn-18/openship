@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router"
 import {
     ArrowLeft, BookOpen, CheckCircle2, Circle, Clock,
-    FileText, ChevronDown, ChevronRight, Sparkles, Loader2
+    FileText, ChevronDown, ChevronRight, Sparkles, Loader2, Send, Eye
 } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,6 +49,10 @@ function ChapterRow({ chapter, onContentGenerated }: {
     const [expanded, setExpanded] = useState(false)
     const [generating, setGenerating] = useState(false)
     const [hasContent, setHasContent] = useState(chapter.has_content)
+    const [newsletterHtml, setNewsletterHtml] = useState<string | null>(null)
+    const [loadingContent, setLoadingContent] = useState(false)
+    const [sending, setSending] = useState(false)
+    const [sent, setSent] = useState(chapter.completed)
 
     async function handleGenerate(e: React.MouseEvent) {
         e.stopPropagation()
@@ -61,33 +65,45 @@ function ChapterRow({ chapter, onContentGenerated }: {
         }
     }
 
+    async function handleExpand() {
+        setExpanded((v) => !v)
+        // load content on first expand if available
+        if (!expanded && hasContent && !newsletterHtml) {
+            setLoadingContent(true)
+            const { success, data } = await getRequest(`/py/chapter/${chapter.id}`)
+            if (success) setNewsletterHtml(data.newsletter)
+            setLoadingContent(false)
+        }
+    }
+
+    async function handleSendEmail() {
+        setSending(true)
+        const { success } = await postRequest("/py/send-email/chapter", { task_id: chapter.id })
+        setSending(false)
+        if (success) setSent(true)
+    }
+
     return (
         <div
             className={`rounded-lg border transition-colors ${
-                chapter.completed
+                sent
                     ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20"
                     : "border-border bg-card"
             }`}
         >
             <div className="flex w-full items-center gap-3 px-4 py-3">
-                {/* completion icon */}
-                <button onClick={() => setExpanded((v) => !v)} className="shrink-0">
-                    {chapter.completed
+                <button onClick={handleExpand} className="shrink-0">
+                    {sent
                         ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                         : <Circle className="h-4 w-4 text-muted-foreground" />
                     }
                 </button>
 
-                {/* title — clickable to expand */}
-                <button
-                    className="flex-1 text-left text-sm font-medium leading-snug"
-                    onClick={() => setExpanded((v) => !v)}
-                >
+                <button className="flex-1 text-left text-sm font-medium leading-snug" onClick={handleExpand}>
                     <span className="text-muted-foreground mr-2">Day {chapter.day}.</span>
                     {chapter.topic}
                 </button>
 
-                {/* right actions */}
                 <div className="flex items-center gap-2 shrink-0">
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
@@ -95,9 +111,15 @@ function ChapterRow({ chapter, onContentGenerated }: {
                     </span>
 
                     {hasContent ? (
-                        <Badge variant="outline" className="text-xs text-indigo-500 border-indigo-300 gap-1 py-0">
-                            <FileText className="h-3 w-3" /> Ready
-                        </Badge>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs gap-1 text-indigo-500 border-indigo-300 hover:text-indigo-600"
+                            onClick={handleExpand}
+                        >
+                            <Eye className="h-3 w-3" />
+                            {expanded ? "Hide" : "View"}
+                        </Button>
                     ) : (
                         <Button
                             size="sm"
@@ -113,7 +135,7 @@ function ChapterRow({ chapter, onContentGenerated }: {
                         </Button>
                     )}
 
-                    <button onClick={() => setExpanded((v) => !v)}>
+                    <button onClick={handleExpand}>
                         {expanded
                             ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                             : <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -123,8 +145,62 @@ function ChapterRow({ chapter, onContentGenerated }: {
             </div>
 
             {expanded && (
-                <div className="border-t border-border/50 px-4 py-3">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{chapter.task}</p>
+                <div className="border-t border-border/50">
+                    {/* task description */}
+                    <div className="px-4 py-3 bg-muted/20">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Task</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{chapter.task}</p>
+                    </div>
+
+                    {/* newsletter content */}
+                    {hasContent && (
+                        <div className="border-t border-border/50">
+                            <div className="px-4 pt-3 pb-1">
+                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                    <FileText className="h-3 w-3" /> Newsletter Content
+                                </p>
+                            </div>
+
+                            {loadingContent ? (
+                                <div className="px-4 py-6 space-y-2">
+                                    <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
+                                    <div className="h-3 bg-muted rounded animate-pulse w-full" />
+                                    <div className="h-3 bg-muted rounded animate-pulse w-5/6" />
+                                    <div className="h-3 bg-muted rounded animate-pulse w-2/3" />
+                                </div>
+                            ) : newsletterHtml ? (
+                                <>
+                                    <div
+                                        className="px-4 py-3 prose prose-sm max-w-none text-foreground overflow-auto max-h-[500px] border-b border-border/50"
+                                        dangerouslySetInnerHTML={{ __html: newsletterHtml }}
+                                    />
+                                    <div className="px-4 py-3 flex items-center justify-between gap-3">
+                                        {sent ? (
+                                            <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                                                <CheckCircle2 className="h-4 w-4" /> Email sent
+                                            </span>
+                                        ) : (
+                                            <p className="text-xs text-muted-foreground">Ready to send to subscriber's inbox.</p>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            disabled={sending || sent}
+                                            onClick={handleSendEmail}
+                                            className={sent ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                                        >
+                                            {sending ? (
+                                                <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Sending…</>
+                                            ) : sent ? (
+                                                <><CheckCircle2 className="h-4 w-4 mr-1.5" />Sent</>
+                                            ) : (
+                                                <><Send className="h-4 w-4 mr-1.5" />Send Email</>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : null}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

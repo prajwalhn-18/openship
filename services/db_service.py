@@ -180,6 +180,20 @@ def get_syllabus_detail(skill_id: int) -> dict | None:
         ],
     }
 
+def get_chapter_content(task_id: int) -> dict | None:
+    row = execute_query_one(
+        """SELECT id, skill, skill_id, topic, task, day, hours, completed, newsletter
+           FROM daily_tasks WHERE id = ?""",
+        (task_id,)
+    )
+    if row is None:
+        return None
+    return {
+        "id": row[0], "skill": row[1], "skill_id": row[2], "topic": row[3],
+        "task": row[4], "day": row[5], "hours": row[6],
+        "completed": bool(row[7]), "newsletter": row[8],
+    }
+
 def get_all_syllabi():
     query = """
         SELECT

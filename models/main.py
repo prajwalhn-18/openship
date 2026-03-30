@@ -15,3 +15,6 @@ class GenerateContentRequest(BaseModel):
 
 class GenerateChapterContentRequest(BaseModel):
     task_id: int = Field(..., description="Task ID to generate content for")
+
+class SendChapterEmailRequest(BaseModel):
+    task_id: int = Field(..., description="Task ID to send email for")
