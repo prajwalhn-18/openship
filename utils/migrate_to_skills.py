@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "../lexi.db"
+DB_PATH = "../openship.db"
 
 email_dict = {
    "sample": "sample@gmail.com"

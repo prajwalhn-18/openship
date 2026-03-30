@@ -1,46 +1,68 @@
+import uuid
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
-from services.syllabus_generator import generate_syllabus
-from services.content_generator import create_content_for_next_10_days, start_content_generation
-from services.newsletter_issuer import issue_todays_newsletters, send_first_email
-from models.main import GenerateContentRequest, OnboardRequest
+from services.syllabus_generator import generate_syllabus, init_db
+from services.content_generator import create_content_for_newsletters
+from services.newsletter_issuer import issue_todays_newsletters
+from services.db_service import skill_exists, create_skill, get_skill
+from models.main import SubscribeRequest, GenerateSyllabusRequest
 
-app = FastAPI(title="Lexi4 Automation API", version="1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
-def initial_user_onboard_orchestrator(user_id: str, skill: str, days: int = 90, hours: int = 1, user_email: str = ""):
-    syllabus_generated = generate_syllabus(user_id, skill, days, hours, user_email)
-    if not syllabus_generated:
-        raise HTTPException(status_code=500, detail=f"Failed to generate syllabus for {user_id} ({skill})")
-
-    content_generated = start_content_generation(user_id)
-    if not content_generated:
-        raise HTTPException(status_code=500, detail=f"Failed to generate content for {user_id}")
-
-    first_email_sent = send_first_email(user_id)
-    if not first_email_sent:
-        raise HTTPException(status_code=500, detail=f"Failed to send first email for {user_id}")
-
-    return {
-        "status": "success",
-        "message": f"User {user_id} successfully onboarded for {skill}",
-    }
+app = FastAPI(title="Openship Automation API", version="1.0", lifespan=lifespan)
 
 
-@app.post("/onboard-user")
-def onboard_user(payload: OnboardRequest):
+@app.post("/subscribe")
+def subscribe(payload: SubscribeRequest):
     """
-    Run full onboarding process:
-      - Generate syllabus
-      - Generate content
-      - Send first email
+    Register a user's email and skill for daily learning newsletters.
     """
-    result = initial_user_onboard_orchestrator(payload.user_id, payload.skill, payload.days, payload.hours, payload.user_email)
-    return result
+    if skill_exists(payload.email, payload.skill):
+        raise HTTPException(status_code=409, detail=f"{payload.email} is already subscribed to '{payload.skill}'")
+
+    user_id = str(uuid.uuid4())
+    skill_id = create_skill(user_id, payload.email, payload.skill, payload.days, payload.hours)
+    if skill_id is None:
+        raise HTTPException(status_code=500, detail="Failed to create subscription")
+
+    return {"status": "success", "message": f"Subscribed {payload.email} to '{payload.skill}'", "user_id": user_id}
+
+
+@app.post("/generate-syllabus")
+def generate_syllabus_endpoint(payload: GenerateSyllabusRequest):
+    """
+    Generate the learning syllabus for a subscribed user.
+    """
+    skill = get_skill(payload.email, payload.skill)
+    if skill is None:
+        raise HTTPException(status_code=404, detail=f"No subscription found for {payload.email} / '{payload.skill}'")
+
+    success = generate_syllabus(skill["user_id"], payload.skill, skill["days"], skill["hours"], payload.email)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to generate syllabus")
+
+    return {"status": "success", "message": f"Syllabus generated for '{payload.skill}'"}
+
+
+@app.post("/generate-content")
+def generate_content():
+    """
+    Generate content for the next 10 days for all active subscribers.
+    """
+    try:
+        create_content_for_newsletters()
+        return {"status": "success", "message": "Content generated for next 10 days"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/issue-newsletters")
 def issue_newsletters():
     """
-    Sends today's newsletters to all users.
+    Send today's newsletter to all active subscribers.
     """
     try:
         issue_todays_newsletters()
@@ -48,17 +70,6 @@ def issue_newsletters():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/generate-next-10-days")
-def generate_next_10_days(payload: GenerateContentRequest):
-    """
-    Generates next 10 days of content for a given user.
-    """
-    try:
-        create_content_for_next_10_days()
-        return {"status": "success", "message": f"Next 10 days of content generated for user {payload.user_id}"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

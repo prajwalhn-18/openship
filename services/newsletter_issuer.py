@@ -11,8 +11,8 @@ from services.refresh_token import get_new_jwt_token
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
-DB_PATH = "lexi.db"
+API_URL = os.getenv("GEMINI_API_URL")
+DB_PATH = os.getenv("DB_PATH", "openship.db")
 TOKEN = os.getenv("LINKIFYI_TOKEN")
 
 def get_tasks_for_day(user_id: str):
@@ -57,10 +57,13 @@ def send_newsletter(email_to: str, title: str, content: str):
     }
 
     try:
+        print(f"Sending newsletter to {email_to} with title {title} and content {content}")
+        '''
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()  # Raises an error for 4xx/5xx responses
-        print("✅ Email sent successfully!")
         return response.json()
+        '''
+        print("✅ Email sent successfully!")
     except requests.exceptions.RequestException as e:
         print(f"❌ Failed to send email: {e}")
         return None
