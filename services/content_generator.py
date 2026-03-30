@@ -77,6 +77,28 @@ def start_content_generation(skill_id: str):
         print("Error in start_content_generation")
         return False
 
+def generate_content_for_task(task_id: int) -> bool:
+    from services.db_service import execute_query_one, add_content_to_db
+    row = execute_query_one(
+        "SELECT id, skill, topic, task, hours FROM daily_tasks WHERE id = ?", (task_id,)
+    )
+    if row is None:
+        print(f"[ERROR] Task {task_id} not found")
+        return False
+    try:
+        blog_html = generate_syllabus_content(
+            task_description=row[3],
+            task_title=row[2],
+            skill=row[1],
+        )
+        if not blog_html:
+            return False
+        add_content_to_db(newsletter=blog_html, task_id=task_id)
+        return True
+    except Exception as e:
+        print(f"[ERROR] generate_content_for_task: {e}")
+        return False
+
 def create_content_for_newsletters():
     try:
         skill_ids = get_list_of_skill_ids()

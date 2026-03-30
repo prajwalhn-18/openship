@@ -7,6 +7,9 @@ import { Home } from "lucide-react";
 import SampleApp from "@/app/plugins/sampleApp";
 import SyllabiPage from "@/app/plugins/syllabi";
 import SyllabusDetailPage from "@/app/plugins/syllabi/detail";
+import GenerateContentPage from "@/app/plugins/generateContent";
+import GenerateSyllabusPage from "@/app/plugins/generateSyllabus";
+import SubscribePage from "@/app/plugins/subscribe";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return children;
@@ -62,6 +65,30 @@ const router = createBrowserRouter([
                 element: (
                     <ProtectedRoute>
                         <SyllabiPage />
+                    </ProtectedRoute>
+                ),
+            },
+            {
+                path: "/subscribe",
+                element: (
+                    <ProtectedRoute>
+                        <SubscribePage />
+                    </ProtectedRoute>
+                ),
+            },
+            {
+                path: "/generate-syllabus",
+                element: (
+                    <ProtectedRoute>
+                        <GenerateSyllabusPage />
+                    </ProtectedRoute>
+                ),
+            },
+            {
+                path: "/generate-content",
+                element: (
+                    <ProtectedRoute>
+                        <GenerateContentPage />
                     </ProtectedRoute>
                 ),
             },

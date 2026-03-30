@@ -2,10 +2,10 @@ import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from services.syllabus_generator import generate_syllabus, init_db
-from services.content_generator import create_content_for_newsletters
+from services.content_generator import create_content_for_newsletters, start_content_generation, generate_content_for_task
 from services.newsletter_issuer import issue_todays_newsletters
 from services.db_service import skill_exists, create_skill, get_skill, get_all_syllabi, get_syllabus_detail
-from models.main import SubscribeRequest, GenerateSyllabusRequest
+from models.main import SubscribeRequest, GenerateSyllabusRequest, GenerateContentRequest, GenerateChapterContentRequest
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,15 +67,26 @@ def generate_syllabus_endpoint(payload: GenerateSyllabusRequest):
 
 
 @app.post("/generate-content")
-def generate_content():
+def generate_content(payload: GenerateContentRequest):
     """
-    Generate content for the next 10 days for all active subscribers.
+    Generate content for the next 10 days for a specific skill.
     """
     try:
-        create_content_for_newsletters()
-        return {"status": "success", "message": "Content generated for next 10 days"}
+        start_content_generation(payload.skill_id)
+        return {"status": "success", "message": f"Content generated for skill {payload.skill_id}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate-content/chapter")
+def generate_chapter_content(payload: GenerateChapterContentRequest):
+    """
+    Generate newsletter content for a single chapter (task).
+    """
+    success = generate_content_for_task(payload.task_id)
+    if not success:
+        raise HTTPException(status_code=500, detail=f"Failed to generate content for task {payload.task_id}")
+    return {"status": "success", "message": f"Content generated for task {payload.task_id}"}
 
 
 @app.post("/issue-newsletters")

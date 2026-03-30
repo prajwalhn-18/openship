@@ -9,3 +9,9 @@ class SubscribeRequest(BaseModel):
 class GenerateSyllabusRequest(BaseModel):
     email: str = Field(..., description="User email address")
     skill: str = Field(..., description="Skill to generate syllabus for")
+
+class GenerateContentRequest(BaseModel):
+    skill_id: int = Field(..., description="Skill ID to generate content for")
+
+class GenerateChapterContentRequest(BaseModel):
+    task_id: int = Field(..., description="Task ID to generate content for")

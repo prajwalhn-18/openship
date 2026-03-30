@@ -2,14 +2,14 @@ import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router"
 import {
     ArrowLeft, BookOpen, CheckCircle2, Circle, Clock,
-    FileText, ChevronDown, ChevronRight
+    FileText, ChevronDown, ChevronRight, Sparkles, Loader2
 } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
-import { getRequest } from "@/services"
+import { getRequest, postRequest } from "@/services"
 import useStore from "@/store"
 
 interface Chapter {
@@ -42,44 +42,86 @@ interface SyllabusDetail {
     months: Month[]
 }
 
-function ChapterRow({ chapter }: { chapter: Chapter }) {
+function ChapterRow({ chapter, onContentGenerated }: {
+    chapter: Chapter
+    onContentGenerated: (taskId: number) => void
+}) {
     const [expanded, setExpanded] = useState(false)
+    const [generating, setGenerating] = useState(false)
+    const [hasContent, setHasContent] = useState(chapter.has_content)
+
+    async function handleGenerate(e: React.MouseEvent) {
+        e.stopPropagation()
+        setGenerating(true)
+        const { success } = await postRequest("/py/generate-content/chapter", { task_id: chapter.id })
+        setGenerating(false)
+        if (success) {
+            setHasContent(true)
+            onContentGenerated(chapter.id)
+        }
+    }
 
     return (
         <div
             className={`rounded-lg border transition-colors ${
                 chapter.completed
                     ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-                    : "border-border bg-card hover:bg-muted/30"
+                    : "border-border bg-card"
             }`}
         >
-            <button
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                onClick={() => setExpanded((v) => !v)}
-            >
-                {chapter.completed ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
-                <span className="flex-1 text-sm font-medium leading-snug">
+            <div className="flex w-full items-center gap-3 px-4 py-3">
+                {/* completion icon */}
+                <button onClick={() => setExpanded((v) => !v)} className="shrink-0">
+                    {chapter.completed
+                        ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        : <Circle className="h-4 w-4 text-muted-foreground" />
+                    }
+                </button>
+
+                {/* title — clickable to expand */}
+                <button
+                    className="flex-1 text-left text-sm font-medium leading-snug"
+                    onClick={() => setExpanded((v) => !v)}
+                >
                     <span className="text-muted-foreground mr-2">Day {chapter.day}.</span>
                     {chapter.topic}
-                </span>
+                </button>
+
+                {/* right actions */}
                 <div className="flex items-center gap-2 shrink-0">
-                    {chapter.has_content && (
-                        <FileText className="h-3.5 w-3.5 text-indigo-400" />
-                    )}
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         {chapter.hours}h
                     </span>
-                    {expanded
-                        ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    }
+
+                    {hasContent ? (
+                        <Badge variant="outline" className="text-xs text-indigo-500 border-indigo-300 gap-1 py-0">
+                            <FileText className="h-3 w-3" /> Ready
+                        </Badge>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs gap-1"
+                            disabled={generating}
+                            onClick={handleGenerate}
+                        >
+                            {generating
+                                ? <><Loader2 className="h-3 w-3 animate-spin" />Generating</>
+                                : <><Sparkles className="h-3 w-3" />Generate</>
+                            }
+                        </Button>
+                    )}
+
+                    <button onClick={() => setExpanded((v) => !v)}>
+                        {expanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        }
+                    </button>
                 </div>
-            </button>
+            </div>
+
             {expanded && (
                 <div className="border-t border-border/50 px-4 py-3">
                     <p className="text-sm text-muted-foreground leading-relaxed">{chapter.task}</p>
@@ -89,7 +131,10 @@ function ChapterRow({ chapter }: { chapter: Chapter }) {
     )
 }
 
-function WeekSection({ week }: { week: Week }) {
+function WeekSection({ week, onContentGenerated }: {
+    week: Week
+    onContentGenerated: (taskId: number) => void
+}) {
     const [open, setOpen] = useState(true)
     const completedCount = week.tasks.filter((t) => t.completed).length
 
@@ -111,7 +156,7 @@ function WeekSection({ week }: { week: Week }) {
             {open && (
                 <div className="space-y-2 pl-1">
                     {week.tasks.map((chapter) => (
-                        <ChapterRow key={chapter.id} chapter={chapter} />
+                        <ChapterRow key={chapter.id} chapter={chapter} onContentGenerated={onContentGenerated} />
                     ))}
                 </div>
             )}
@@ -119,7 +164,10 @@ function WeekSection({ week }: { week: Week }) {
     )
 }
 
-function MonthSection({ month }: { month: Month }) {
+function MonthSection({ month, onContentGenerated }: {
+    month: Month
+    onContentGenerated: (taskId: number) => void
+}) {
     const allTasks = month.weeks.flatMap((w) => w.tasks)
     const completedCount = allTasks.filter((t) => t.completed).length
     const progress = allTasks.length > 0 ? Math.round((completedCount / allTasks.length) * 100) : 0
@@ -143,7 +191,7 @@ function MonthSection({ month }: { month: Month }) {
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
                 {month.weeks.map((week) => (
-                    <WeekSection key={week.week} week={week} />
+                    <WeekSection key={week.week} week={week} onContentGenerated={onContentGenerated} />
                 ))}
             </CardContent>
         </Card>
@@ -195,11 +243,28 @@ export default function SyllabusDetailPage() {
             setLoading(false)
         }
         fetchDetail()
-    }, [skillId])
+    }, [skillId, setPluginName, setPluginInfo])
 
     const allTasks = detail?.months.flatMap((m) => m.weeks.flatMap((w) => w.tasks)) ?? []
     const completedCount = allTasks.filter((t) => t.completed).length
     const overallProgress = allTasks.length > 0 ? Math.round((completedCount / allTasks.length) * 100) : 0
+
+    // called when a chapter's content is generated — update local state without full refetch
+    function handleContentGenerated(taskId: number) {
+        setDetail((prev) => {
+            if (!prev) return prev
+            return {
+                ...prev,
+                months: prev.months.map((m) => ({
+                    ...m,
+                    weeks: m.weeks.map((w) => ({
+                        ...w,
+                        tasks: w.tasks.map((t) => t.id === taskId ? { ...t, has_content: true } : t),
+                    })),
+                })),
+            }
+        })
+    }
 
     if (loading) return <DetailSkeleton />
 
@@ -253,12 +318,15 @@ export default function SyllabusDetailPage() {
                 <Card className="flex flex-col items-center justify-center py-16 text-center border-dashed">
                     <BookOpen className="h-10 w-10 text-muted-foreground mb-3" />
                     <h3 className="font-semibold text-lg">No chapters yet</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Generate a syllabus to populate chapters.</p>
+                    <p className="text-muted-foreground text-sm mt-1">Go back and generate a syllabus first.</p>
+                    <Button variant="outline" className="mt-4" onClick={() => navigate("/syllabi")}>
+                        <ArrowLeft className="h-4 w-4 mr-1" /> Back to Syllabi
+                    </Button>
                 </Card>
             ) : (
                 <div className="space-y-4">
                     {detail.months.map((month) => (
-                        <MonthSection key={month.month} month={month} />
+                        <MonthSection key={month.month} month={month} onContentGenerated={handleContentGenerated} />
                     ))}
                 </div>
             )}

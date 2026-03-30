@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { Blocks, Layers, BrainCircuit, BookOpen } from "lucide-react";
+import { BrainCircuit, BookOpen, UserPlus } from "lucide-react";
 import { useEffect } from "react";
 
 import { NavMain } from "@/components/nav-main";
@@ -30,26 +30,17 @@ const data = {
     ],
     navMain: [
         {
-            title: "General",
-            url: "#",
-            icon: Blocks,
-            isActive: true,
-            items: [
-                {
-                    title: "Sample App",
-                    icon: Layers,
-                    url: "/sample-route",
-                    isActive: false,
-                },
-            ],
-        },
-
-        {
             title: "Learning",
             url: "#",
             icon: BrainCircuit,
             isActive: true,
             items: [
+                {
+                    title: "Subscribe",
+                    icon: UserPlus,
+                    url: "/subscribe",
+                    isActive: false,
+                },
                 {
                     title: "Syllabi",
                     icon: BookOpen,

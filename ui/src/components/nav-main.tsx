@@ -40,7 +40,7 @@ export function NavMain({
 
     return (
         <SidebarGroup>
-            <SidebarGroupLabel>Plugins</SidebarGroupLabel>
+            <SidebarGroupLabel>Menu</SidebarGroupLabel>
             <SidebarMenu>
                 {items.map((item) => (
                     <Collapsible
